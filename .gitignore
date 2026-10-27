@@ -1,0 +1,9 @@
+data/record.sqlite*
+data/hfcache/
+data/models/
+data/export/
+logs/
+.venv/
+__pycache__/
+config/companion.yaml
+*.lock

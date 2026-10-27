@@ -1,0 +1,15 @@
+[Unit]
+Description=Companion housekeeping (Jar 2 index writer)
+After=network.target
+
+[Service]
+WorkingDirectory=%h/companion
+Environment=COMPL_HOME=%h
+ExecStart=%h/companion/.venv/bin/python3 %h/companion/housekeeping.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=append:%h/companion/logs/events.log
+StandardError=append:%h/companion/logs/events.log
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,31 @@
+# Dedicated pinned summarizer for the memory index (CPU-only, port 8097).
+# --device none --n-gpu-layers 0 = zero VRAM, so your chat model keeps its
+# memory. Keep this service's --alias matching model_path in companion.yaml;
+# resolve_summarizer() compares against GET /models and hard-fails if the
+# pinned server is missing (deliberate: silent fallback to a general-purpose
+# server was the failure mode that produced hundreds of junk rows).
+#
+# Optional tuning notes from production:
+#  - taskset -a (not plain -p): plain pins only the calling thread; llama-server
+#    has dozens of threads. Match core count to --threads.
+#  - --load-mode mlock: smaller RSS even when rlimits prevent real pinning; it
+#    changes allocation strategy (private anon vs shared page cache).
+#  - --temp 0.2 and --jinja: keep; the summarizer prompt expects the chat
+#    template.
+[Unit]
+Description=Companion summarizer (CPU-only, :8097)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/llama.cpp/build/bin
+ExecStart=%h/llama.cpp/build/bin/llama-server \
+  --model %h/companion/data/models/compactor.gguf \
+  --host 127.0.0.1 --port 8097 --alias compactor \
+  --device none --ctx-size 8192 --n-gpu-layers 0 --threads 8 \
+  --load-mode mlock --temp 0.2 --jinja
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

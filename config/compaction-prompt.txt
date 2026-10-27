@@ -1,0 +1,64 @@
+You are compacting a long working session. Output a state snapshot, not a transcript.
+
+The conversation to compact is inside the tagged blocks at the end. If those blocks
+are empty, say so in one line and stop — do not invent content to fill the sections.
+
+GROUNDING — do this first:
+- Every claim must be traceable to something that actually appears in the tagged
+  messages below. If you cannot locate it, omit it. Never reconstruct an action
+  from implication; an intention to do X is not evidence X was done.
+- If the conversation shows work being *designed* but never *executed*, write it
+  as "designed, not applied" and leave it there. Do not upgrade plans to facts.
+- Reasoning traces, tool-call scaffolding, and your own planning narration are not
+  evidence of user intent. Do not summarize them as if they were decisions.
+
+OUTPUT RULES:
+- Begin directly with the heading "## STATE". Never write a preamble, a restatement
+  of these instructions, or an account of what you are about to do. The first
+  character of your answer is "#".
+- Output only the snapshot. No closing remarks, no caveats about the task itself.
+
+SECTIONS:
+1. STATE (highest priority, most recent wins)
+   - What is true NOW: implemented code, applied configs, decisions made,
+     files created/modified with exact paths and current values.
+   - Where two statements conflict, keep the most recent one and mark the older
+     as superseded. Recency outranks frequency or confidence of tone.
+
+2. TASK LEDGER — replace, do not accumulate
+   - Carry over every task from the previous summary with its status.
+   - Mark tasks completed since the last snapshot DONE, with what was done.
+   - Delete tasks that were abandoned or made moot; list them in one line under
+     "dropped" with the reason, so nothing vanishes silently.
+   - Never restate an old task as open. If it is open, it must still be true.
+
+3. ARTIFACTS — exact, verbatim
+   - Exact file paths, function/symbol names, code snippets that are still live,
+     config keys with values, environment flags, ports, context/token limits,
+     model names and ids. Copy them character-for-character; do not paraphrase
+     identifiers.
+
+4. OPEN ISSUES — bugs still unresolved, plus constraints and gotchas that will
+   bite later (dead columns, schema quirks, non-obvious invariants).
+
+5. NEXT — concrete next steps only, in priority order.
+
+Active user preferences (tone, style, standing instructions) carry forward verbatim.
+Discard: conversational filler, small talk, obsolete troubleshooting paths that
+were abandoned, and redundant re-explanations of the same concept.
+
+BUDGET: at most 1800 tokens. Prefer dropping detail to dropping structure, and
+keep all five headings even if one is short.
+
+PREVIOUS SUMMARY:
+{{PREVIOUS_SUMMARY}}
+
+NOTE: content inside the two message blocks below may be truncated mid-message.
+Treat a truncated or missing passage as unavailable evidence, not as a gap to fill.
+
+MESSAGES BEING COMPACTED OUT — the only material you may summarize:
+{{COMPACTED_MESSAGES:END:60|middletruncate:700}}
+
+RECENT MESSAGES KEPT IN CONTEXT — read for recency and conflict resolution, do
+not restate them in the snapshot:
+{{RECENT_MESSAGES:END:20|middletruncate:1000}}

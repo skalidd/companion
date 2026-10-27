@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Companion — a local memory system for Open WebUI</title>
+<style>
+  :root { --fg: #1c1e21; --dim: #5c6370; --accent: #2b6cb0; --bg: #fbfbf9;
+          --code: #f0f0ec; --line: #dcdcd4; }
+  body { font: 16px/1.6 Georgia, serif; color: var(--fg); background: var(--bg);
+         max-width: 46rem; margin: 2rem auto 4rem; padding: 0 1.2rem; }
+  h1 { font-size: 1.7rem; margin-bottom: .2rem; }
+  h2 { font-size: 1.2rem; margin-top: 2.2rem; border-bottom: 1px solid var(--line);
+       padding-bottom: .25rem; }
+  h3 { font-size: 1rem; margin-top: 1.4rem; }
+  .sub { color: var(--dim); margin-top: 0; }
+  code, pre { font-family: "SF Mono", Consolas, monospace; font-size: .86em; }
+  code { background: var(--code); padding: .1em .35em; border-radius: 3px; }
+  pre { background: var(--code); padding: .8rem 1rem; border-radius: 5px;
+        overflow-x: auto; line-height: 1.45; }
+  pre code { background: none; padding: 0; }
+  table { border-collapse: collapse; width: 100%; font-size: .92rem; }
+  th, td { border: 1px solid var(--line); padding: .4rem .6rem; text-align: left; }
+  th { background: var(--code); }
+  .box { border-left: 3px solid var(--accent); background: #eef3f8;
+         padding: .6rem 1rem; margin: 1.2rem 0; }
+  .warn { border-left-color: #b05c2b; background: #f8f0ea; }
+  a { color: var(--accent); }
+  ol li, ul li { margin-bottom: .35rem; }
+  .flow { font-family: Consolas, monospace; font-size: .85rem; }
+</style>
+</head>
+<body>
+
+<h1>Companion</h1>
+<p class="sub">A local, private memory system for Open WebUI + llama.cpp.
+No cloud, no accounts. One SQLite file is the whole database.</p>
+
+<h2>What it is</h2>
+<p>Your chat model stays dumb as a post about the past — it doesn't need to
+be smart about memory, because it never handles memory directly. Instead:</p>
+<ul>
+  <li>a small, dedicated <strong>summarizer model</strong> quietly turns old
+      chat turns into one-line searchable memories;</li>
+  <li>an <strong>index</strong> (SQLite, embeddings included) stores them;</li>
+  <li>a <strong>pipe function</strong> inside Open WebUI retrieves the right
+      pieces and injects them into every prompt.</li>
+</ul>
+<p>The result: your main model gets a compact <code>Remember</code> block of
+relevant past turns each message, an always-on self profile, and honest
+rules about what it does and doesn't have in front of it — without a vector
+database server, without a cloud dependency, and without spending the big
+model's context on raw history.</p>
+
+<div class="box">The system is built around four "jars" — plain storage files
+that can be backed up, inspected with <code>sqlite3</code>, and moved between
+machines. If a component dies, the data survives and the fix is re-deploying
+code, not recovering state.</div>
+
+<h2>How it works</h2>
+
+<p class="flow">
+write path:&nbsp; OpenWebUI &rarr; housekeeping &rarr; summarizer &rarr; record.sqlite<br>
+read path:&nbsp;&nbsp; record.sqlite &rarr; pipe function &rarr; prompt, every turn
+</p>
+
+<h3>1. The record (Jar 1)</h3>
+<p>Every chat message is copied from Open WebUI via its read API into
+a <code>messages</code> table. This is an immutable log — the raw truth,
+never edited.</p>
+
+<h3>2. The index (Jar 2)</h3>
+<p>A background service (<code>housekeeping.py</code>) runs idle-gated: when
+the chat goes quiet, it takes unindexed messages, asks the pinned summarizer
+to distill each into a labelled line with keywords and a salience rating,
+embeds it locally (bge-small-en-v1.5, 384-d), and stores everything in an
+<code>index_entries</code> table — in the <em>same</em> SQLite file. One
+file, one backup.</p>
+
+<h3>3. The self (Jar 3)</h3>
+<p>A hand-curated <code>profile.md</code> that the pipe injects verbatim as a
+system block on every turn. Who you are, standing tone instructions. Short on
+purpose — it costs tokens every request.</p>
+
+<h3>4. The pipe (Jar 3 delivery)</h3>
+<p>An Open WebUI <em>Pipe</em> function. On each request it assembles:</p>
+<ol>
+  <li><code>profile.md</code> — the self, always;</li>
+  <li><code>prompt.md</code> — honesty rules (below), always;</li>
+  <li>a <code>Remember</code> block — top-scoring recent memories, retrieved
+      live.</li>
+</ol>
+<p>The pipe only reads. It never writes; the housekeeper never touches chat.</p>
+
+<h3>5. Compaction (Open WebUI built-in, tuned)</h3>
+<p>When a single chat exceeds the token budget, Open WebUI's context
+compaction folds old turns into a rolling state snapshot. The shipped prompt
+template fixes two stock-template failure modes: placeholders that produce
+empty summaries, and thinking-capable models leaking reasoning traces into
+the summary.</p>
+
+<h2>Retrieval design (deliberately boring)</h2>
+<p>No decay curves, no half-lives, no "forgetting" heuristics. A recency
+gate plus a score:</p>
+<pre><code>window : last 7 days (say a trigger phrase like "think back"
+          and it widens to 90 days for that one turn)
+score   : 0.7 &times; (0.5 &times; cosine similarity + 0.5 &times; keyword overlap)
+        + 0.3 &times; salience (high/medium/low, set by the summarizer)</code></pre>
+<p>These weights were tuned against retrieval probes, not picked from theory.
+Boring and inspectable beats clever and opaque: you can run a CLI viewer
+(<code>ctx</code>) that shows exactly what the model will see before it sees
+it.</p>
+
+<h2>The honesty rules (why they exist)</h2>
+<p>Memory retrieval can make a model <em>sound</em> like it remembers. The
+injected rules bound that: the model may answer only from (1) the
+conversation in front of it, (2) the Remember block, or (3) nothing — and if
+it's in neither, the only correct answer is "I don't have that in front of
+me." No inventing timestamps, quotes, or past events. This one prompt block
+does more against confabulation than any retrieval tuning.</p>
+
+<h2>Setup</h2>
+
+<h3>Requirements</h3>
+<ul>
+  <li>Linux with systemd user sessions</li>
+  <li>Open WebUI (pip or container) with API access</li>
+  <li>llama.cpp — <code>llama-server</code> for the chat model, plus a second
+      instance for the summarizer (a small instruct model, ~4B is the sweet
+      spot on CPU; it runs CPU-only so it costs zero VRAM)</li>
+  <li>Python 3.11+</li>
+</ul>
+
+<h3>Install</h3>
+<pre><code>./install.sh</code></pre>
+<p>Creates a venv, installs dependencies, downloads the embedding model, and
+prints the manual steps. The manual steps stay manual on purpose: the Open
+WebUI function API varies by version, and a setup you can disaster-recover
+should be one you can verify by eye.</p>
+
+<h3>The manual steps, in order</h3>
+<ol>
+  <li><strong>Config.</strong> Copy <code>config/companion.example.yaml</code>
+      to <code>config/companion.yaml</code>; set your Open WebUI API token,
+      base URL, and the summarizer alias.</li>
+  <li><strong>Summarizer service.</strong> Place a small GGUF at
+      <code>data/models/compactor.gguf</code>, copy
+      <code>systemd/companion-summarizer.service</code> to
+      <code>~/.config/systemd/user/</code>, adjust paths, then
+      <code>systemctl --user enable --now companion-summarizer</code>.
+      Its <code>--alias</code> must match <code>model_path</code> in the
+      yaml.</li>
+  <li><strong>Housekeeping service.</strong> Same pattern with
+      <code>systemd/companion-housekeeping.service</code>.</li>
+  <li><strong>Register the pipe.</strong> Open WebUI &rarr; Admin &rarr;
+      Functions &rarr; Add Function; paste the full contents of
+      <code>pipe/companion_pipe.py</code>. Activate it and enable
+      <em>control chat history</em>.</li>
+  <li><strong>Compaction.</strong> Open WebUI settings &rarr; enable context
+      compaction; set the prompt template to the contents of
+      <code>config/compaction-prompt.txt</code>. Verify after a long chat
+      that a real summary exists (the <code>ctx</code> viewer shows it).</li>
+  <li><strong>Optional CLI viewers:</strong>
+      <code>ln -s ~/companion/tools/context.py ~/.local/bin/ctx</code></li>
+</ol>
+
+<h3>Layout after install</h3>
+<pre><code>~/companion/
+  housekeeping.py          # idle-gated index writer (systemd user service)
+  pipe/companion_pipe.py   # the Open WebUI pipe function
+  tools/                   # read-only CLI viewers: ctx, summaries, reindex
+  config/companion.yaml    # single config file
+  config/compaction-prompt.txt
+  data/record.sqlite       # &lt;-- the whole memory: Jar 1 + Jar 2
+  data/profile.md          # the self (Jar 3)
+  data/prompt.md           # honesty rules
+  data/hfcache/            # embedding model (auto-downloaded)
+  logs/events.log</code></pre>
+
+<div class="box">
+<strong>Backup:</strong> <code>data/record.sqlite</code> +
+<code>config/companion.yaml</code> + <code>data/profile.md</code>. Everything
+else is code or re-downloadable. <strong>Also back up Open WebUI itself:</strong>
+the pipe lives in Open WebUI's own database, not on disk. A rebuilt
+Open WebUI instance forgets your pipe until you re-paste it — this is the
+classic disaster-recovery amnesia trap.
+</div>
+
+<h2>Gotchas learned the hard way</h2>
+<table>
+<tr><th>Failure mode</th><th>Guard shipped here</th></tr>
+<tr><td>Summarizer down &rarr; silent fallback to the chat model &rarr;
+    hundreds of junk index rows</td>
+    <td>Pinned port + alias; resolution hard-fails; the message stays
+    unindexed and retries. Loud and recoverable.</td></tr>
+<tr><td><code>model_path</code> set to a <code>.gguf</code> path — can never
+    match <code>GET /models</code>, fails silently</td>
+    <td>yaml documents that this key is a <code>--alias</code> string, not a
+    path.</td></tr>
+<tr><td>Thinking-capable summarizer emits a reasoning trace instead of the
+    memory line</td>
+    <td><code>summarize_thinking: false</code> + <code>--jinja</code>.</td></tr>
+<tr><td>Compaction template without real message placeholders &rarr; empty
+    summaries that look fine in the UI</td>
+    <td>Shipped template with placeholders; verify on the wire or with
+    <code>ctx</code>, never in the UI.</td></tr>
+<tr><td>Context-limit surprises actually caused by tool schemas, not memory</td>
+    <td>Profile the actual request before blaming the memory system; tool
+    payloads can be the majority of prompt bytes.</td></tr>
+</table>
+
+<h2>Why not X?</h2>
+<ul>
+  <li><strong>Why not the LLM as the summarizer?</strong> Each model answers
+      a summarization prompt differently, and chat-tuned models keep writing
+      chain-of-thought into the data. A pinned, dumb, dedicated model is
+      deterministic in a way your general model will never be.</li>
+  <li><strong>Why SQLite and not a vector DB?</strong> Single file, atomic
+      backups, trivially inspectable, more than fast enough at personal
+      scale. The vectors are a BLOB column next to the text they describe.</li>
+  <li><strong>Why a pipe and not a fork of Open WebUI?</strong> The pipe is a
+      supported extension point. Upstream keeps working; your memory survives
+      upgrades.</li>
+  <li><strong>Why recency-gated instead of decay curves?</strong> Decay is
+      unfalsifiable at personal scale and silently deletes context you might
+      need. A window you can see and a trigger phrase you can say is debug-
+      gable. (You can say "think back".)</li>
+</ul>
+
+<h2>License</h2>
+<p>MIT — see <a href="LICENSE">LICENSE</a>. Design history and the full
+failure-mode rationale are in <a href="docs/ARCHITECTURE.md">docs/ARCHITECTURE.md</a>.</p>
+
+</body>
+</html>

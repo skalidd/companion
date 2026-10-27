@@ -1,0 +1,63 @@
+# companion.yaml — single config file for the whole system. (v2 layout)
+# Copy to config/companion.yaml and edit. Paths below are examples relative
+# to $HOME; adjust to your install location.
+
+# --- Open WebUI integration (read API + pipe function) ---
+open_webui_base: "http://127.0.0.1:3000"   # wherever OWU's API is reachable
+open_webui_token: "REPLACE-WITH-YOUR-OPEN-WEBUI-TOKEN"
+
+# --- Summarizer model (the compacting brain, NOT the chat brain) ---
+# One dedicated small summarizer, pinned, CPU-only so it costs zero VRAM.
+#   llama_cpp_api  = the compactor server (llama-server, --device none)
+#   model_path     = the /models id (llama-server --alias), NOT a .gguf path.
+#                    It is compared against GET /models in resolve_summarizer(),
+#                    so a filesystem path here could NEVER validate.
+model_path: "compactor"
+llama_cpp_api: "http://127.0.0.1:8097"
+
+# --- Summarizer endpoint discovery (see resolve_summarizer in housekeeping.py) ---
+# Intentionally only the pinned port. If the compactor is down, resolution
+# raises: the message stays indexed=0 and retries, which is loud and
+# recoverable. Falling back to a general-purpose server was the failure mode
+# that produced hundreds of junk rows.
+candidate_ports: [8097]
+resolve_cache_seconds: 60             # on success, re-probe at most this often
+resolve_probe_timeout_seconds: 3      # per-port /models timeout
+summarize_max_tokens: 600             # 200 truncated reasoning models mid-answer
+summarize_thinking: false             # thinking-capable models emit a reasoning
+                                      # trace instead of the labelled lines unless OFF
+
+# --- Jar 1 + Jar 2: the single SQLite store (one file, one backup) ---
+record_db: "~/companion/data/record.sqlite"
+export_dir: "~/companion/data/export"
+# Jar 2 lives as the `index_entries` table INSIDE record.sqlite (vectors BLOB).
+
+# --- Jar 3: the self (curated profile + honesty/voice rules) ---
+# NOTE: housekeeping does not read these two keys; the pipe reads
+# data/profile.md and data/prompt.md directly. Kept for documentation.
+profile: "~/companion/data/profile.md"
+prompt:  "~/companion/data/prompt.md"
+
+# --- Retrieval: recency-gated window (no decay, no half-life) ---
+retrieval:
+  default_window_days: 7
+  expanded_window_days: 90
+  expand_trigger: "think back"        # phrase that widens the window for one turn
+  max_context_tokens_for_retrieval: 4000
+  relevance_weight: 0.7
+  salience_weight: 0.3
+  salience: {high: 1.0, medium: 0.5, low: 0.2}
+
+# --- Housekeeping loop ---
+poll_interval_seconds: 10
+idle_threshold_seconds: 30
+max_summarization_retries: 5
+batch_size: 20
+
+# --- Embeddings (Brick 4) ---
+embedding:
+  provider: "local"
+  model: "sentence-transformers/BAAI/bge-small-en-v1.5"
+  dim: 384
+
+log: "~/companion/logs/events.log"
