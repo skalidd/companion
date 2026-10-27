@@ -26,6 +26,13 @@ junk index rows. The pin (one port, one alias, one small model, thinking
 off) plus a hard failure when it's missing is deliberate: loud and
 recoverable beats silent and polluted.
 
+The model itself: `schneewolflabs/Compactor-Qwen3.5-4B` (Q4_K_M GGUF),
+fine-tuned for context compaction. Benchmarked against the
+served chat model on the same prompts: higher parse rate on the labelled
+format, fewer output tokens, and CPU-only at zero VRAM versus the chat
+model's GPU footprint. A task-tuned small model is not a downgrade here;
+it is the point.
+
 `resolve_summarizer()` validates `model_path` against `GET /models`. That
 comparison is why the yaml holds an *alias string*, not a `.gguf` path —
 a path can never match, and the mismatch degrades silently.

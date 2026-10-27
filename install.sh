@@ -29,7 +29,8 @@ echo
 echo "==================== MANUAL STEPS ===================="
 cat <<'STEPS'
 1. Edit $DEST/config/companion.yaml  (open_webui_token, paths, alias)
-2. Summarizer: put your compact gguf at $DEST/data/models/compactor.gguf,
+2. Summarizer: put your compact gguf at $DEST/data/models/compactor.gguf
+   (recommended: schneewolflabs/Compactor-Qwen3.5-4B, Q4_K_M quant),
    copy systemd/companion-summarizer.service to
    ~/.config/systemd/user/, edit paths, then:
      systemctl --user daemon-reload && systemctl --user enable --now companion-summarizer

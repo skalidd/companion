@@ -8,6 +8,9 @@ open_webui_token: "REPLACE-WITH-YOUR-OPEN-WEBUI-TOKEN"
 
 # --- Summarizer model (the compacting brain, NOT the chat brain) ---
 # One dedicated small summarizer, pinned, CPU-only so it costs zero VRAM.
+# What we run: schneewolflabs/Compactor-Qwen3.5-4B (Q4_K_M GGUF from
+# huggingface.co), fine-tuned for compaction. Any small instruct model can
+# work in its place; a task-tuned one parses the labelled format far better.
 #   llama_cpp_api  = the compactor server (llama-server, --device none)
 #   model_path     = the /models id (llama-server --alias), NOT a .gguf path.
 #                    It is compared against GET /models in resolve_summarizer(),

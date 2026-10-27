@@ -127,7 +127,11 @@ does more against confabulation than any retrieval tuning.</p>
   <li>Open WebUI (pip or container) with API access</li>
   <li>llama.cpp — <code>llama-server</code> for the chat model, plus a second
       instance for the summarizer (a small instruct model, ~4B is the sweet
-      spot on CPU; it runs CPU-only so it costs zero VRAM)</li>
+      spot on CPU; it runs CPU-only so it costs zero VRAM). What we run:
+      <a href="https://huggingface.co/schneewolflabs/Compactor-Qwen3.5-4B">schneewolflabs/Compactor-Qwen3.5-4B</a>
+      (Q4_K_M GGUF), fine-tuned for exactly this compaction task — which is
+      why it follows the labelled-line format reliably where general chat
+      models did not.</li>
   <li>Python 3.11+</li>
 </ul>
 
@@ -144,7 +148,9 @@ should be one you can verify by eye.</p>
       to <code>config/companion.yaml</code>; set your Open WebUI API token,
       base URL, and the summarizer alias.</li>
   <li><strong>Summarizer service.</strong> Place a small GGUF at
-      <code>data/models/compactor.gguf</code>, copy
+      <code>data/models/compactor.gguf</code> (recommended:
+      <a href="https://huggingface.co/schneewolflabs/Compactor-Qwen3.5-4B">Compactor-Qwen3.5-4B</a>,
+      Q4_K_M), copy
       <code>systemd/companion-summarizer.service</code> to
       <code>~/.config/systemd/user/</code>, adjust paths, then
       <code>systemctl --user enable --now companion-summarizer</code>.

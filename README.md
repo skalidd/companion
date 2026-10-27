@@ -46,7 +46,11 @@ each guard exists to prevent.
 - Open WebUI (pip or container) with API access
 - llama.cpp (`llama-server`) for the chat model **and** a second instance
   for the summarizer (any small instruct model works; ~4B is the sweet
-  spot on CPU)
+  spot on CPU). What we actually run:
+  [`schneewolflabs/Compactor-Qwen3.5-4B`](https://huggingface.co/schneewolflabs/Compactor-Qwen3.5-4B),
+  Q4_K\_M GGUF — fine-tuned for this compaction task, which is why it
+  follows the labelled-line format reliably where general chat models
+  did not.
 - Python 3.11+
 
 ## Install
