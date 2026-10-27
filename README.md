@@ -3,6 +3,11 @@
 Persistent, private memory for a self-hosted Open WebUI + llama.cpp stack.
 No cloud, no accounts. One SQLite file is the whole database.
 
+This is a working personal system, not a maintained product. It runs on one
+machine against one Open WebUI version, and it is not going to grow a test
+suite. Fork it, break it, take what's useful — the architecture notes in
+`docs/ARCHITECTURE.md` are probably the most portable part.
+
 Your chat model stays dumb as a post about the past; a small pinned
 summarizer model quietly compacts it into a searchable index; a pipe
 function re-injects the right pieces at every turn.

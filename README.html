@@ -52,6 +52,13 @@ rules about what it does and doesn't have in front of it — without a vector
 database server, without a cloud dependency, and without spending the big
 model's context on raw history.</p>
 
+<div class="box warn"><strong>Expectations.</strong> This is a working personal
+system, not a maintained product. It runs on one machine against one Open
+WebUI version, and it will not grow a test suite. Fork it, break it, take
+what is useful — the architecture notes in
+<a href="docs/ARCHITECTURE.md">docs/ARCHITECTURE.md</a> are probably the most
+portable part of the whole thing.</div>
+
 <div class="box">The system is built around four "jars" — plain storage files
 that can be backed up, inspected with <code>sqlite3</code>, and moved between
 machines. If a component dies, the data survives and the fix is re-deploying
