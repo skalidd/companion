@@ -33,6 +33,13 @@ format, fewer output tokens, and CPU-only at zero VRAM versus the chat
 model's GPU footprint. A task-tuned small model is not a downgrade here;
 it is the point.
 
+Keep it on CPU even if you have VRAM to spare. A Q4 4B is a few GB; on a
+24 GB card that is a few GB your main model would rather spend on context, and
+a 4B prompt pass of this size finishes fast enough on 8 threads that the
+difference doesn't matter. VRAM is the constrained resource in nearly every
+local stack; system RAM almost never is. Offloading the summarizer is the
+wrong direction to optimize in.
+
 `resolve_summarizer()` validates `model_path` against `GET /models`. That
 comparison is why the yaml holds an *alias string*, not a `.gguf` path —
 a path can never match, and the mismatch degrades silently.
